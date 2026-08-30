@@ -13,8 +13,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-val CATS = listOf("Cafe / Matcha","Breakfast","Lunch","Dinner","Local Food / Snacks","Petrol","Medicine","Ganesh / Festival","Family / Gifts","Shopping","Entertainment","Other")
+val CATS = listOf("Cafe / Matcha", "Breakfast", "Lunch", "Dinner", "Local Food / Snacks", "Petrol", "Medicine", "Ganesh / Festival", "Family / Gifts", "Shopping", "Entertainment", "Other")
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(b: Bundle?) {
@@ -38,9 +41,12 @@ fun App() {
     var edit by remember { mutableStateOf<Expense?>(null) }
     val spent = list.sumOf { it.amount }
 
+    // Dynamically updates month name (e.g. "August", "September")
+    val currentMonth = remember { SimpleDateFormat("MMMM", Locale.getDefault()).format(Date()) }
+
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("SpendTrack • September") })
+            TopAppBar(title = { Text("SpendTrack • $currentMonth") })
         }
     ) { p ->
         Column(Modifier.padding(p).padding(16.dp)) {
@@ -76,6 +82,12 @@ fun App() {
                             TextButton(onClick = { edit = e }) {
                                 Text("Edit")
                             }
+                            TextButton(
+                                onClick = { scope.launch { dao.delete(e) } },
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Text("Delete")
+                            }
                         }
                     }
                 }
@@ -84,7 +96,13 @@ fun App() {
     }
 
     if (add) {
-        ExpenseDialog(null, close = { add = false }) { e ->
+        val today = remember { SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date()) }
+        ExpenseDialog(
+            old = null,
+            defaultDate = today,
+            close = { add = false },
+            onDelete = null
+        ) { e ->
             scope.launch {
                 dao.insert(e)
                 add = false
@@ -93,7 +111,17 @@ fun App() {
     }
 
     edit?.let { old ->
-        ExpenseDialog(old, close = { edit = null }) { e ->
+        ExpenseDialog(
+            old = old,
+            defaultDate = old.date,
+            close = { edit = null },
+            onDelete = {
+                scope.launch {
+                    dao.delete(old)
+                    edit = null
+                }
+            }
+        ) { e ->
             scope.launch {
                 dao.update(e)
                 edit = null
@@ -103,7 +131,64 @@ fun App() {
 }
 
 @Composable
-fun ExpenseDialog(old: Expense?, close: () -> Unit, save: (Expense) -> Unit) {
+fun ExpenseDialog(
+    old: Expense?,
+    defaultDate: String,
+    close: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+    save: (Expense) -> Unit
+) {
+    var amount by remember { mutableStateOf(old?.amount?.toString() ?: "") }
+    var merchant by remember { mutableStateOf(old?.merchant ?: "") }
+    var cat by remember { mutableStateOf(old?.category ?: "Other") }
+    var date by remember { mutableStateOf(old?.date ?: defaultDate) }
+    var open by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text(if (old == null) "Add expense" else "Edit expense") },
+        text = {
+            Column {
+                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount") })
+                OutlinedTextField(value = merchant, onValueChange = { merchant = it }, label = { Text("Merchant") })
+                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Date") })
+                Spacer(Modifier.height(8.dp))
+                Box {
+                    OutlinedButton(onClick = { open = true }) {
+                        Text(cat)
+                    }
+                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                        CATS.forEach { c ->
+                            DropdownMenuItem(text = { Text(c) }, onClick = { cat = c; open = false })
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                if (onDelete != null) {
+                    TextButton(
+                        onClick = onDelete,
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete")
+                    }
+                }
+                TextButton(onClick = {
+                    save(Expense(old?.id ?: 0, amount.toDoubleOrNull() ?: 0.0, merchant, cat, date, old?.source ?: "MANUAL", old?.notificationHash))
+                }) {
+                    Text("Save")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = close) {
+                Text("Cancel")
+            }
+        }
+    )
+}
     var amount by remember { mutableStateOf(old?.amount?.toString() ?: "") }
     var merchant by remember { mutableStateOf(old?.merchant ?: "") }
     var cat by remember { mutableStateOf(old?.category ?: "Other") }
