@@ -12,15 +12,7 @@ class KotakNotificationListener : NotificationListenerService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val allowed = setOf(
-        "com.msf.kopl",                                // Kotak Mobile Banking
-        "com.kotak811",                                // Kotak 811
-        "com.google.android.apps.messaging",           // Google Messages
-        "com.android.mms",                             // Stock / ColorOS / Realme SMS
-        "com.samsung.android.messaging",               // Samsung Messages
-        "com.oneplus.mms",                             // OnePlus SMS
-        "com.coloros.mms"                              // Oppo SMS
-    )
+    private val allowed = setOf("com.kotak811", "com.msf.kopl", "com.google.android.apps.messaging", "com.oneplus.mms", "com.android.mms", "com.samsung.android.messaging", "com.coloros.mms")
 
     override fun onDestroy() {
         scope.cancel()
@@ -54,13 +46,14 @@ class KotakNotificationListener : NotificationListenerService() {
                 // Deduplicate: avoid re-opening dialog if notification hash exists
                 if (dao.hasHash(hash)) return@launch
 
-                val intent = Intent(this@KotakNotificationListener, MainActivity::class.java).apply {
+                val intent = Intent(this@KotakNotificationListener, ConfirmActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    putExtra("AMOUNT", amount)
-                    putExtra("MERCHANT", merchant)
-                    putExtra("NOTIFICATION_HASH", hash)
+                    putExtra("amount", amount)
+                    putExtra("merchant", merchant)
+                    putExtra("hash", hash)
                     putExtra("RAW_TEXT", full)
                 }
+                
                 startActivity(intent)
             }
         }
