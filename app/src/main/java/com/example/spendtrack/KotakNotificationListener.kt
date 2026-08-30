@@ -43,11 +43,12 @@ class KotakNotificationListener : NotificationListenerService() {
         val full = "$title $text $bigText $subText".trim()
 
         // Diagnostic Filter: check if this is related to banking/SMS
-        val isRelevant = full.contains("Kotak", ignoreCase = true) ||
-                         full.contains("UPI", ignoreCase = true) ||
-                         full.contains("Sent", ignoreCase = true) ||
-                         full.contains("Debited", ignoreCase = true)
-
+        val isRelevant = full.contains("Sent", ignoreCase = true) ||
+                         full.contains("Debited", ignoreCase = true) ||
+                         full.contains("Paid", ignoreCase = true) ||
+                         full.contains("Spent", ignoreCase = true) ||
+                         full.contains("Credited", ignoreCase = true) ||
+                         full.contains("Received", ignoreCase = true)
         if (!isRelevant) return
 
         // LIVE DIAGNOSTIC TOAST (Proves the listener is alive and reading)
@@ -56,8 +57,8 @@ class KotakNotificationListener : NotificationListenerService() {
         }
 
         // Matches "Sent Rs.1.00", "Sent Rs 1.00", "Debited Rs. 500", etc.
-        val pattern = Pattern.compile(
-            "(?:Sent|Debited|Paid|Spent)\\s*(?:Rs\\.?|INR)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?)",
+        val pattern = Pattern.compil
+            "(?:Sent|Debited|Paid|Spent|Credited|Received)\\s*(?:₹|Rs\\.?|INR)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?)|(?:₹|Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)\\s*(?:has been |was )?(?:debited|credited|spent|paid|sent|received)",
             Pattern.CASE_INSENSITIVE
         )
         val matcher = pattern.matcher(full)
