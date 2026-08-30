@@ -57,12 +57,22 @@ class KotakNotificationListener : NotificationListenerService() {
         }
 
         // Matches "Sent Rs.1.00", "Sent Rs 1.00", "Debited Rs. 500", etc.
-        val pattern = Pattern.compil(
-            "(?:Sent|Debited|Paid|Spent|Credited|Received)\\s*(?:₹|Rs\\.?|INR)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?)|(?:₹|Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)\\s*(?:has been |was )?(?:debited|credited|spent|paid|sent|received)",
-            Pattern.CASE_INSENSITIVE
+        val pattern = Pattern.compile(
+             """(?:₹|Rs\.?|INR)\s*([0-9,]+(?:\.[0-9]+)?)""",
+             Pattern.CASE_INSENSITIVE
         )
+        
         val matcher = pattern.matcher(full)
+        val isDebit = Regex(
+            """\b(sent|debited|debit|paid|spent|purchase|withdrawn)\b""",
+            RegexOption.IGNORE_CASE
+            ).containsMatchIn(full)
 
+        val isCredit = Regex(
+            """\b(credited|credit|received|deposit)\b""",
+            RegexOption.IGNORE_CASE
+            ).containsMatchIn(full)
+        
         if (matcher.find()) {
             val amount = (matcher.group(1) ?: matcher.group(2))?.replace(",", "")?.toDoubleOrNull() ?: return
             val hash = sha(full)
