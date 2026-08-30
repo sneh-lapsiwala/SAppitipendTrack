@@ -21,17 +21,6 @@ class KotakNotificationListener : NotificationListenerService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val allowed = setOf(
-        "com.kotak811",
-        "com.msf.kopl",
-        "com.google.android.apps.messaging",
-        "com.oneplus.mms",
-        "com.oplus.mms",
-        "com.android.mms",
-        "com.samsung.android.messaging",
-        "com.coloros.mms"
-    )
-
     override fun onDestroy() {
         scope.cancel()
         super.onDestroy()
@@ -39,14 +28,23 @@ class KotakNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        val pkg = sbn.packageName ?: return
-        if (pkg !in allowed) return
+        val notif = sbn.notification ?: return
+        val extras = notif.extras ?: return
 
-        val extras = sbn.notification.extras
+        // Extract full text from all possible Android notification fields
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
-        val full = "$title $text".trim()
+        val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
+        val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
 
+        val full = "$title $text $bigText $subText".trim()
+
+        // Filter: Only parse if it contains Kotak indicators or transaction keywords
+        if (!full.contains("Kotak", ignoreCase = true) && !full.contains("UPI", ignoreCase = true) && !full.contains("Sent", ignoreCase = true) && !full.contains("Debited", ignoreCase = true)) {
+            return
+        }
+
+        // Matches "Sent Rs.1.00", "Sent Rs 1.00", "Debited Rs. 500", etc.
         val pattern = Pattern.compile(
             "(?:Sent|Debited|Paid|Spent)\\s*(?:Rs\\.?|INR)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?)",
             Pattern.CASE_INSENSITIVE
@@ -61,6 +59,7 @@ class KotakNotificationListener : NotificationListenerService() {
             val dao = AppDb.get(this).dao()
 
             scope.launch {
+                // Prevent duplicates
                 if (dao.hasHash(hash)) return@launch
 
                 val insertedId = dao.insert(
@@ -107,7 +106,7 @@ class KotakNotificationListener : NotificationListenerService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notif = NotificationCompat.Builder(this, channelId)
+        val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle("SpendTrack: ₹${"%.2f".format(amount)} Logged")
             .setContentText("Paid to $merchant • Tap to change category")
@@ -117,7 +116,7 @@ class KotakNotificationListener : NotificationListenerService() {
             .setContentIntent(pendingIntent)
             .build()
 
-        manager.notify(expenseId.toInt(), notif)
+        manager.notify(expenseId.toInt(), notification)
     }
 
     private fun parseMerchant(text: String): String {
