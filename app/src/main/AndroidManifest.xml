@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<application android:theme="@style/AppTheme" android:label="@string/app_name" android:allowBackup="true">
+<activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+<service android:name=".KotakNotificationListener" android:exported="false" android:label="@string/app_name" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+<intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter></service>
+<activity android:name=".ConfirmActivity" android:exported="false"/></application></manifest>
