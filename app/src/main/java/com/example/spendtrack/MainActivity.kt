@@ -20,19 +20,35 @@ import java.util.Locale
 val CATS = listOf("Cafe / Matcha", "Breakfast", "Lunch", "Dinner", "Local Food / Snacks", "Petrol", "Medicine", "Ganesh / Festival", "Family / Gifts", "Shopping", "Entertainment", "Other")
 
 class MainActivity : ComponentActivity() {
+    private var pendingEditId = mutableStateOf<Long?>(null)
+
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
+        handleIntent(intent)
         setContent {
             MaterialTheme {
-                App()
+                App(pendingEditId = pendingEditId)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val id = intent?.getLongExtra("EDIT_EXPENSE_ID", -1L) ?: -1L
+        if (id != -1L) {
+            pendingEditId.value = id
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun App() {
+fun App(pendingEditId: MutableState<Long?>) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val dao = remember { AppDb.get(ctx).dao() }
     val scope = rememberCoroutineScope()
@@ -41,7 +57,18 @@ fun App() {
     var edit by remember { mutableStateOf<Expense?>(null) }
     val spent = list.sumOf { it.amount }
 
-    // Dynamically updates month name (e.g. "August", "September")
+    // If opened via the heads-up notification tap, automatically launch edit dialog
+    LaunchedEffect(pendingEditId.value, list) {
+        val targetId = pendingEditId.value
+        if (targetId != null && list.isNotEmpty()) {
+            val found = list.find { it.id == targetId }
+            if (found != null) {
+                edit = found
+                pendingEditId.value = null
+            }
+        }
+    }
+
     val currentMonth = remember { SimpleDateFormat("MMMM", Locale.getDefault()).format(Date()) }
 
     Scaffold(
