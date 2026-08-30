@@ -10,7 +10,7 @@ import java.util.regex.Pattern
 
 class KotakNotificationListener : NotificationListenerService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val allowed = setOf("com.kotak811")
+    private val allowed = setOf("com.kotak811", "com.msf.kopl", "com.google.android.apps.messaging", "com.oneplus.mms", "com.android.mms")
 
     override fun onDestroy() {
         scope.cancel()
@@ -24,7 +24,7 @@ class KotakNotificationListener : NotificationListenerService() {
         val body = n.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val full = "$title\n$body".trim()
 
-        val m = Pattern.compile("Sent\\s+Rs\\.?\\s*([0-9,]+(?:\\.[0-9]{1,2})?)", Pattern.CASE_INSENSITIVE).matcher(full)
+        val m = Pattern.compile("(?:Sent|Debited|Paid|Spent)\\s+(?:Rs\\.?|INR)?(?:\\s+)?([0-9,]+(?:\\.[0-9]{1,2})?)", Pattern.CASE_INSENSITIVE).matcher(full)
         if (!m.find()) return
         val amount = m.group(1)?.replace(",", "")?.toDoubleOrNull() ?: return
         
