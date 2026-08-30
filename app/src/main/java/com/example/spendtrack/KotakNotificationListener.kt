@@ -74,7 +74,7 @@ class KotakNotificationListener : NotificationListenerService() {
             ).containsMatchIn(full)
         
         if (matcher.find()) {
-            val amount = (matcher.group(1) ?: matcher.group(2))?.replace(",", "")?.toDoubleOrNull() ?: return
+            val amount = matcher.group(1)?.replace(",", "")?.toDoubleOrNull() ?: return
             val hash = sha(full)
             val merchant = parseMerchant(full)
             val today = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
