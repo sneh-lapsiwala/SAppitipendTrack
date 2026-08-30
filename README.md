@@ -51,6 +51,13 @@ To listen to other banking apps or SMS packages, edit the allow-list and regex i
 - **Allowed Packages**:
   ```kotlin
   private val allowed = setOf("com.kotak811", "com.msf.kopl")
+
+  val m = Pattern.compile("Sent\\s+Rs\\.?(?:\\s+)?([0-9,]+(?:\\.[0-9]{1,2})?)", Pattern.CASE_INSENSITIVE).matcher(full)
+This is a Regular Expression (Regex) rule inside KotakNotificationListener.kt that scans the raw incoming notification text and automatically extracts the transaction money amount.
+Here is how that pattern breaks down:
+Sent\s+Rs\.?: Looks for words like "Sent Rs" or "Sent Rs." followed by spaces.
+(?:\s+)?: Handles any optional spaces between the currency label and the number.
+([0-9,]+(?:\.[0-9]{1,2})?): This is the capture group that extracts the actual number (e.g., 250, 1,500.50, or 90.00).
   
 Pattern.CASE_INSENSITIVE: Ensures it matches whether the bank notification writes "SENT", "sent", or "Sent".
 .matcher(full): Feeds the complete title and body text of the notification into the pattern to find a match.
