@@ -7,8 +7,11 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import java.security.MessageDigest
@@ -39,9 +42,17 @@ class KotakNotificationListener : NotificationListenerService() {
 
         val full = "$title $text $bigText $subText".trim()
 
-        // Filter: Only parse if it contains Kotak indicators or transaction keywords
-        if (!full.contains("Kotak", ignoreCase = true) && !full.contains("UPI", ignoreCase = true) && !full.contains("Sent", ignoreCase = true) && !full.contains("Debited", ignoreCase = true)) {
-            return
+        // Diagnostic Filter: check if this is related to banking/SMS
+        val isRelevant = full.contains("Kotak", ignoreCase = true) ||
+                         full.contains("UPI", ignoreCase = true) ||
+                         full.contains("Sent", ignoreCase = true) ||
+                         full.contains("Debited", ignoreCase = true)
+
+        if (!isRelevant) return
+
+        // LIVE DIAGNOSTIC TOAST (Proves the listener is alive and reading)
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(applicationContext, "Read: ${full.take(50)}...", Toast.LENGTH_LONG).show()
         }
 
         // Matches "Sent Rs.1.00", "Sent Rs 1.00", "Debited Rs. 500", etc.
@@ -75,6 +86,9 @@ class KotakNotificationListener : NotificationListenerService() {
 
                 showLoggedNotification(insertedId, amount, merchant)
             }
+        } else {
+            // Regex failed to match amount, but notification was received
+            showDebugNotification("Regex Failed to Match", full)
         }
     }
 
@@ -117,6 +131,22 @@ class KotakNotificationListener : NotificationListenerService() {
             .build()
 
         manager.notify(expenseId.toInt(), notification)
+    }
+
+    private fun showDebugNotification(title: String, rawText: String) {
+        val channelId = "spendtrack_alerts"
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle("SpendTrack Debug: $title")
+            .setContentText(rawText.take(100))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(rawText))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify((System.currentTimeMillis() % 10000).toInt(), notification)
     }
 
     private fun parseMerchant(text: String): String {
