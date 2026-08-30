@@ -14,7 +14,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 val CATS=listOf("Cafe / Matcha","Breakfast","Lunch","Dinner","Local Food / Snacks","Petrol","Medicine","Ganesh / Festival","Family / Gifts","Shopping","Entertainment","Other")
-
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
 class MainActivity:ComponentActivity(){
  override fun onCreate(b:Bundle?){super.onCreate(b); setContent{App()}}
 }
