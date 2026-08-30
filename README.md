@@ -52,3 +52,5 @@ To listen to other banking apps or SMS packages, edit the allow-list and regex i
   ```kotlin
   private val allowed = setOf("com.kotak811", "com.msf.kopl")
   
+Pattern.CASE_INSENSITIVE: Ensures it matches whether the bank notification writes "SENT", "sent", or "Sent".
+.matcher(full): Feeds the complete title and body text of the notification into the pattern to find a match.
