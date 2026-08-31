@@ -31,6 +31,7 @@ class KotakNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
+        if (sbn.packageName == this.packageName) return
         val notif = sbn.notification ?: return
         val extras = notif.extras ?: return
 
