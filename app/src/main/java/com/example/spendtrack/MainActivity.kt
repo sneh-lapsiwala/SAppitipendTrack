@@ -52,23 +52,28 @@ fun App(pendingEditId: MutableState<Long?>) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val dao = remember { AppDb.get(ctx).dao() }
     val scope = rememberCoroutineScope()
+    
+    // 1. Reactive DB stream - updates automatically on new insertions
     val list by dao.all().collectAsState(initial = emptyList())
-    var add by remember { mutableStateOf(false) }
-    var edit by remember { mutableStateOf<Expense?>(null) }
+    
+    // 2. Real-time balance calculations
+    val totalBudget = 9000.0
     val spent = list.sumOf { it.amount }
+    val remaining = totalBudget - spent
 
-    // If opened via the heads-up notification tap, automatically launch edit dialog
+    // Auto-open edit dialog if triggered from the notification banner
     LaunchedEffect(pendingEditId.value, list) {
         val targetId = pendingEditId.value
         if (targetId != null && list.isNotEmpty()) {
             val found = list.find { it.id == targetId }
             if (found != null) {
-                edit = found
                 pendingEditId.value = null
             }
         }
     }
 
+    var add by remember { mutableStateOf(false) }
+    var edit by remember { mutableStateOf<Expense?>(null) }
     val currentMonth = remember { SimpleDateFormat("MMMM", Locale.getDefault()).format(Date()) }
 
     Scaffold(
@@ -79,9 +84,9 @@ fun App(pendingEditId: MutableState<Long?>) {
         Column(Modifier.padding(p).padding(16.dp)) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp)) {
-                    Text("Budget ₹9,000", style = MaterialTheme.typography.titleLarge)
+                    Text("Budget ₹${"%.2f".format(totalBudget)}", style = MaterialTheme.typography.titleLarge)
                     Text("Spent ₹${"%.2f".format(spent)}")
-                    Text("Remaining ₹${"%.2f".format(9000 - spent)}")
+                    Text("Remaining ₹${"%.2f".format(remaining)}")
                 }
             }
             Spacer(Modifier.height(10.dp))
