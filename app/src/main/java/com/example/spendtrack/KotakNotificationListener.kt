@@ -34,54 +34,54 @@ class KotakNotificationListener : NotificationListenerService() {
         val notif = sbn.notification ?: return
         val extras = notif.extras ?: return
 
-        // Extract full text from all possible Android notification fields
+        // Extract every possible text container from bank push alerts & SMS
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
+        val ticker = notif.tickerText?.toString() ?: ""
+        
+        // Handle multi-line inbox styles from bank apps
+        val textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString(" ") ?: ""
 
-        val full = "$title $text $bigText $subText".trim()
+        val full = "$title $text $bigText $subText $ticker $textLines".trim()
+        if (full.isBlank()) return
 
-        // Diagnostic Filter: check if this is related to banking/SMS
-        val isRelevant = full.contains("Sent", ignoreCase = true) ||
-                         full.contains("Debited", ignoreCase = true) ||
-                         full.contains("Paid", ignoreCase = true) ||
-                         full.contains("Spent", ignoreCase = true) ||
-                         full.contains("Credited", ignoreCase = true) ||
-                         full.contains("Received", ignoreCase = true)
-        if (!isRelevant) return
+        // Keyword filter: accepts bank notifications, UPI alerts, and SMS
+        val isTransaction = full.contains("Kotak", ignoreCase = true) ||
+                            full.contains("UPI", ignoreCase = true) ||
+                            full.contains("debited", ignoreCase = true) ||
+                            full.contains("sent", ignoreCase = true) ||
+                            full.contains("spent", ignoreCase = true) ||
+                            full.contains("paid", ignoreCase = true) ||
+                            full.contains("txn", ignoreCase = true) ||
+                            full.contains("transferred", ignoreCase = true)
 
-        // LIVE DIAGNOSTIC TOAST (Proves the listener is alive and reading)
+        if (!isTransaction) return
+
+        // Live Diagnostic Toast
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(applicationContext, "Read: ${full.take(50)}...", Toast.LENGTH_LONG).show()
+            Toast.makeText(applicationContext, "Capturing: ${full.take(45)}...", Toast.LENGTH_SHORT).show()
         }
 
-        // Matches "Sent Rs.1.00", "Sent Rs 1.00", "Debited Rs. 500", etc.
+        // Comprehensive Regex covering Bank App Pushes + SMS:
+        // Handles "Sent Rs.1.00", "INR 500 debited", "debited by Rs 200", "Txn of Rs 100", "Paid Rs. 50"
         val pattern = Pattern.compile(
-             """(?:₹|Rs\.?|INR)\s*([0-9,]+(?:\.[0-9]+)?)""",
-             Pattern.CASE_INSENSITIVE
+            "(?:(?:Sent|Debited|Paid|Spent|Txn|Transfer(?:red)?)(?:\\s+by|\\s+of|\\s+for)?\\s*(?:Rs\\.?|INR)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?)|(?:Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)\\s*(?:debited|spent|paid|sent))",
+            Pattern.CASE_INSENSITIVE
         )
-        
         val matcher = pattern.matcher(full)
-        val isDebit = Regex(
-            """\b(sent|debited|debit|paid|spent|purchase|withdrawn)\b""",
-            RegexOption.IGNORE_CASE
-            ).containsMatchIn(full)
 
-        val isCredit = Regex(
-            """\b(credited|credit|received|deposit)\b""",
-            RegexOption.IGNORE_CASE
-            ).containsMatchIn(full)
-        
         if (matcher.find()) {
-            val amount = matcher.group(1)?.replace(",", "")?.toDoubleOrNull() ?: return
+            val rawAmount = matcher.group(1) ?: matcher.group(2) ?: return
+            val amount = rawAmount.replace(",", "").toDoubleOrNull() ?: return
             val hash = sha(full)
             val merchant = parseMerchant(full)
             val today = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
             val dao = AppDb.get(this).dao()
 
             scope.launch {
-                // Prevent duplicates
+                // Avoid re-logging exact duplicate alerts
                 if (dao.hasHash(hash)) return@launch
 
                 val insertedId = dao.insert(
@@ -98,8 +98,7 @@ class KotakNotificationListener : NotificationListenerService() {
                 showLoggedNotification(insertedId, amount, merchant)
             }
         } else {
-            // Regex failed to match amount, but notification was received
-            showDebugNotification("Regex Failed to Match", full)
+            showDebugNotification("Regex Mismatch", full)
         }
     }
 
@@ -113,7 +112,7 @@ class KotakNotificationListener : NotificationListenerService() {
                 "Expense Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "SpendTrack automatic transaction notifications"
+                description = "SpendTrack transaction alerts"
                 enableVibration(true)
             }
             manager.createNotificationChannel(channel)
@@ -133,8 +132,8 @@ class KotakNotificationListener : NotificationListenerService() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
-            .setContentTitle("SpendTrack: ₹${"%.2f".format(amount)} Logged")
-            .setContentText("Paid to $merchant • Tap to change category")
+            .setContentTitle("SpendTrack: ₹${"%.2f".format(amount)} Recorded")
+            .setContentText("Paid to $merchant • Tap to edit category")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
@@ -150,7 +149,7 @@ class KotakNotificationListener : NotificationListenerService() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("SpendTrack Debug: $title")
+            .setContentTitle("SpendTrack: $title")
             .setContentText(rawText.take(100))
             .setStyle(NotificationCompat.BigTextStyle().bigText(rawText))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -164,8 +163,10 @@ class KotakNotificationListener : NotificationListenerService() {
         val specific = Regex("to\\s+(.+?)\\s+on\\s+\\d{2}-\\d{2}-\\d{2}", RegexOption.IGNORE_CASE).find(text)
         if (specific != null) return specific.groupValues[1].trim()
 
-        val generic = Pattern.compile("(?:to|at|info)\\s+([A-Za-z0-9\\s]{2,25})", Pattern.CASE_INSENSITIVE).matcher(text)
-        return if (generic.find()) generic.group(1)?.trim() ?: "Kotak Debit" else "Kotak Debit"
+        val atMatch = Regex("(?:to|at|vpa|info)\\s+([A-Za-z0-9\\s]{2,25})", RegexOption.IGNORE_CASE).find(text)
+        if (atMatch != null) return atMatch.groupValues[1].trim()
+
+        return "Kotak Debit"
     }
 
     private fun sha(s: String): String {
