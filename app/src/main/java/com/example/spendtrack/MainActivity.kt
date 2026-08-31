@@ -5,12 +5,14 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -19,6 +21,35 @@ import java.util.Locale
 
 val CATS = listOf("Cafe / Matcha", "Breakfast", "Lunch", "Dinner", "Local Food / Snacks", "Petrol", "Medicine", "Ganesh / Festival", "Family / Gifts", "Shopping", "Entertainment", "Other")
 
+// Custom Material 3 Color Palettes
+private val LightColors = lightColorScheme(
+    primary = Color(0xFF1E3A8A),           // Deep Indigo
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFDBEAFE),  // Soft Blue Tint
+    onPrimaryContainer = Color(0xFF1E3A8A),
+    secondary = Color(0xFF0D9488),         // Modern Teal
+    onSecondary = Color.White,
+    surface = Color(0xFFF8FAFC),          // Clean Light Slate
+    onSurface = Color(0xFF0F172A),
+    surfaceVariant = Color(0xFFF1F5F9),   // Card Surface
+    onSurfaceVariant = Color(0xFF334155),
+    error = Color(0xFFDC2626)              // Alert Red
+)
+
+private val DarkColors = darkColorScheme(
+    primary = Color(0xFF93C5FD),
+    onPrimary = Color(0xFF0F172A),
+    primaryContainer = Color(0xFF1E293B),
+    onPrimaryContainer = Color(0xFF93C5FD),
+    secondary = Color(0xFF2DD4BF),
+    onSecondary = Color(0xFF0F172A),
+    surface = Color(0xFF0F172A),          // Deep Slate Background
+    onSurface = Color(0xFFF8FAFC),
+    surfaceVariant = Color(0xFF1E293B),   // Dark Card Surface
+    onSurfaceVariant = Color(0xFFCBD5E1),
+    error = Color(0xFFF87171)
+)
+
 class MainActivity : ComponentActivity() {
     private var pendingEditId = mutableStateOf<Long?>(null)
 
@@ -26,8 +57,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(b)
         handleIntent(intent)
         setContent {
-            MaterialTheme {
-                App(pendingEditId = pendingEditId)
+            val isDark = isSystemInDarkTheme()
+            val colors = if (isDark) DarkColors else LightColors
+
+            MaterialTheme(colorScheme = colors) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    App(pendingEditId = pendingEditId)
+                }
             }
         }
     }
@@ -53,15 +92,12 @@ fun App(pendingEditId: MutableState<Long?>) {
     val dao = remember { AppDb.get(ctx).dao() }
     val scope = rememberCoroutineScope()
     
-    // 1. Reactive DB stream - updates automatically on new insertions
     val list by dao.all().collectAsState(initial = emptyList())
     
-    // 2. Real-time balance calculations
     val totalBudget = 9000.0
     val spent = list.sumOf { it.amount }
     val remaining = totalBudget - spent
 
-    // Auto-open edit dialog if triggered from the notification banner
     LaunchedEffect(pendingEditId.value, list) {
         val targetId = pendingEditId.value
         if (targetId != null && list.isNotEmpty()) {
@@ -78,38 +114,62 @@ fun App(pendingEditId: MutableState<Long?>) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("SpendTrack • $currentMonth") })
+            TopAppBar(
+                title = { Text("SpendTrack • $currentMonth") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
         }
     ) { p ->
         Column(Modifier.padding(p).padding(16.dp)) {
-            Card(Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            ) {
                 Column(Modifier.padding(18.dp)) {
                     Text("Budget ₹${"%.2f".format(totalBudget)}", style = MaterialTheme.typography.titleLarge)
-                    Text("Spent ₹${"%.2f".format(spent)}")
-                    Text("Remaining ₹${"%.2f".format(remaining)}")
+                    Spacer(Modifier.height(4.dp))
+                    Text("Spent ₹${"%.2f".format(spent)}", style = MaterialTheme.typography.bodyLarge)
+                    Text("Remaining ₹${"%.2f".format(remaining)}", style = MaterialTheme.typography.bodyLarge)
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth()) {
-                Button(onClick = { add = true }, modifier = Modifier.weight(1f)) {
+                Button(
+                    onClick = { add = true }, 
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
                     Text("+ Expense")
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(
                     onClick = { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
                     Text("Kotak access")
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             LazyColumn {
                 items(list, key = { it.id }) { e ->
-                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
                         Row(Modifier.padding(12.dp)) {
                             Column(Modifier.weight(1f)) {
-                                Text("₹${"%.2f".format(e.amount)} • ${e.merchant}")
-                                Text("${e.category} • ${e.date}")
+                                Text("₹${"%.2f".format(e.amount)} • ${e.merchant}", style = MaterialTheme.typography.titleMedium)
+                                Text("${e.category} • ${e.date}", style = MaterialTheme.typography.bodySmall)
                             }
                             TextButton(onClick = { edit = e }) {
                                 Text("Edit")
@@ -181,9 +241,26 @@ fun ExpenseDialog(
         title = { Text(if (old == null) "Add expense" else "Edit expense") },
         text = {
             Column {
-                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount") })
-                OutlinedTextField(value = merchant, onValueChange = { merchant = it }, label = { Text("Merchant") })
-                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Date") })
+                OutlinedTextField(
+                    value = amount, 
+                    onValueChange = { amount = it }, 
+                    label = { Text("Amount") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = merchant, 
+                    onValueChange = { merchant = it }, 
+                    label = { Text("Merchant") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = date, 
+                    onValueChange = { date = it }, 
+                    label = { Text("Date") },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(Modifier.height(8.dp))
                 Box {
                     OutlinedButton(onClick = { open = true }) {
