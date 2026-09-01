@@ -31,24 +31,38 @@ class KotakNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-        if (sbn.packageName == this.packageName) return
+
+        // 1. Ignore SpendTrack's own notifications
+        val pkg = sbn.packageName ?: return
+        if (pkg == this.packageName) return
+
+        // 2. Filter for SMS, Banking, and UPI apps only
+        val isAllowedApp = pkg.contains("sms", ignoreCase = true) ||
+                           pkg.contains("mms", ignoreCase = true) ||
+                           pkg.contains("messaging", ignoreCase = true) ||
+                           pkg.contains("kotak", ignoreCase = true) ||
+                           pkg.contains("google.android.apps.messaging", ignoreCase = true) ||
+                           pkg.contains("google.android.apps.nbu.paisa.user", ignoreCase = true) ||
+                           pkg.contains("phonepe", ignoreCase = true) ||
+                           pkg.contains("paytm", ignoreCase = true)
+
+        if (!isAllowedApp) return
+
         val notif = sbn.notification ?: return
         val extras = notif.extras ?: return
 
-        // Extract every possible text container from bank push alerts & SMS
+        // 3. Extract text fields
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
         val ticker = notif.tickerText?.toString() ?: ""
-        
-        // Handle multi-line inbox styles from bank apps
         val textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString(" ") ?: ""
 
         val full = "$title $text $bigText $subText $ticker $textLines".trim()
         if (full.isBlank()) return
 
-        // Keyword filter: accepts bank notifications, UPI alerts, and SMS
+        // 4. Keyword gate for financial alerts
         val isTransaction = full.contains("Kotak", ignoreCase = true) ||
                             full.contains("UPI", ignoreCase = true) ||
                             full.contains("debited", ignoreCase = true) ||
@@ -60,13 +74,7 @@ class KotakNotificationListener : NotificationListenerService() {
 
         if (!isTransaction) return
 
-        // Live Diagnostic Toast
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(applicationContext, "Capturing: ${full.take(45)}...", Toast.LENGTH_SHORT).show()
-        }
-
-        // Comprehensive Regex covering Bank App Pushes + SMS:
-        // Handles "Sent Rs.1.00", "INR 500 debited", "debited by Rs 200", "Txn of Rs 100", "Paid Rs. 50"
+        // 5. Amount parsing regex
         val pattern = Pattern.compile(
             "(?:(?:Sent|Debited|Paid|Spent|Txn|Transfer(?:red)?)(?:\\s+by|\\s+of|\\s+for)?\\s*(?:Rs\\.?|INR)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?)|(?:Rs\\.?|INR)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)\\s*(?:debited|spent|paid|sent))",
             Pattern.CASE_INSENSITIVE
@@ -82,7 +90,6 @@ class KotakNotificationListener : NotificationListenerService() {
             val dao = AppDb.get(this).dao()
 
             scope.launch {
-                // Avoid re-logging exact duplicate alerts
                 if (dao.hasHash(hash)) return@launch
 
                 val insertedId = dao.insert(
@@ -96,10 +103,14 @@ class KotakNotificationListener : NotificationListenerService() {
                     )
                 )
 
+                // Confirmation Toast at bottom
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(applicationContext, "Logged ₹${"%.2f".format(amount)} to $merchant", Toast.LENGTH_SHORT).show()
+                }
+
+                // Heads-up notification to edit category
                 showLoggedNotification(insertedId, amount, merchant)
             }
-        } else {
-            showDebugNotification("Regex Mismatch", full)
         }
     }
 
@@ -142,22 +153,6 @@ class KotakNotificationListener : NotificationListenerService() {
             .build()
 
         manager.notify(expenseId.toInt(), notification)
-    }
-
-    private fun showDebugNotification(title: String, rawText: String) {
-        val channelId = "spendtrack_alerts"
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("SpendTrack: $title")
-            .setContentText(rawText.take(100))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(rawText))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .build()
-
-        manager.notify((System.currentTimeMillis() % 10000).toInt(), notification)
     }
 
     private fun parseMerchant(text: String): String {
